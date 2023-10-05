@@ -1,0 +1,15 @@
+- name: Install EPEL repo
+  ansible.builtin.yum:
+    name: epel-release
+    state: installed
+# - name: Run items asynchronously in batch of two items
+#   vars:
+#     sleep_durations:
+#       - 1
+#       - 2
+#       - 3
+#       - 4
+#       - 5
+#     durations: "{{ item }}"
+#   include_tasks: execute_batch.yml
+#   loop: "{{ sleep_durations | batch(2) | list }}"

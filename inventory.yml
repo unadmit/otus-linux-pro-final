@@ -1,0 +1,39 @@
+all:
+  hosts:
+    ansible:
+      ansible_connection: local
+    nginx-apache-mysql:
+      ansible_host: 192.168.56.3
+      ansible_user: root
+      ansible_ssh_private_key_file: /home/vagrant/.ssh/id_rsa
+    apache-mysql-slave:
+      ansible_host: 192.168.56.4
+      ansible_user: root
+      ansible_ssh_private_key_file: /home/vagrant/.ssh/id_rsa
+    prometheus:
+      ansible_host: 192.168.56.5
+      ansible_user: root
+      ansible_ssh_private_key_file: /home/vagrant/.ssh/id_rsa
+    backup:
+      ansible_host: 192.168.56.6
+      ansible_user: root
+      ansible_ssh_private_key_file: /home/vagrant/.ssh/id_rsa
+    elk:
+      ansible_host: 192.168.56.7
+      ansible_user: root
+      ansible_ssh_private_key_file: /home/vagrant/.ssh/id_rsa
+webapache:
+  hosts:
+    nginx-apache-mysql:
+    apache-mysql-slave:
+webnginx:
+  hosts:
+    nginx-apache-mysql:
+dbmysql:
+  hosts:
+    nginx-apache-mysql:
+      replication_role: master
+      server_id: 1
+    apache-mysql-slave:
+      replication_role: slave
+      server_id: 2
