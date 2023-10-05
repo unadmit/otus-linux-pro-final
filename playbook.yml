@@ -1,9 +1,9 @@
 ---
-- hosts: webnginx
-  become: yes
-  roles:
-    - role: web_httpd
-- hosts: webapache
+- hosts: all
   become: yes
   roles:
     - role: common_settings
+- hosts: webapache
+  become: yes
+  roles:
+    - role: web_httpd

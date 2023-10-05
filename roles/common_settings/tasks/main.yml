@@ -1,3 +1,8 @@
+- name: Enable firewalld
+  ansible.builtin.systemd:
+    name: firewalld
+    enabled: yes
+    state: started
 - name: Install EPEL repo
   ansible.builtin.yum:
     name: epel-release

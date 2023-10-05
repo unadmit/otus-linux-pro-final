@@ -90,7 +90,7 @@ Vagrant.configure("2") do |config|
           ansible.inventory_path = "inventory.yml"
           ansible.playbook = "playbook.yml"
           ansible.limit = "all"
-          # ansible.verbose = "vvv"
+          ansible.verbose = "vvv"
         end
       end
     end
