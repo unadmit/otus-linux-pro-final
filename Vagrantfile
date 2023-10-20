@@ -46,7 +46,7 @@ servers={
     :hostname => "ansible",
     :box_name => "centos/7",
     :box_version => "2004.1",
-    :memory => "1024",
+    :memory => "4096",
     :cpu => "1",
     :ip => "192.168.56.2"
   }
@@ -54,33 +54,34 @@ servers={
 
 Vagrant.configure("2") do |config|
   servers.each_with_index do |(machinename,machineconfig),index|
-      config.vm.define machinename do |node|
-          node.vm.box_check_update = false
-          node.vm.box = machineconfig[:box_name]
-          node.vm.box_version = machineconfig[:box_version]
-          node.vm.host_name = machineconfig[:hostname]
-          node.vm.network "private_network", ip: machineconfig[:ip]
-          node.vm.provider "virtualbox" do |vb|
-              vb.customize ["modifyvm", :id, "--memory", machineconfig[:memory]]
-              vb.customize ["modifyvm", :id, "--cpus", machineconfig[:cpu]]
-          end
-          node.vm.provision "ssh_keys", type: "shell", run: "always" do |s|
-            ssh_pub_key = File.readlines("#{Dir.home}/.ssh/id_rsa.pub").first.strip
-            s.inline = <<-SHELL
-              sudo mkdir -p ~root/.ssh
-              echo #{ssh_pub_key} >> /home/vagrant/.ssh/authorized_keys
-              echo #{ssh_pub_key} >> /root/.ssh/authorized_keys
-            SHELL
-          end
-          node.vm.provision "copy_private", after: "ssh_keys", type: "file", run: "always", source: "/root/.ssh/id_rsa", destination: "/tmp/.ssh/id_rsa"
-          node.vm.provision "move_private", after: "copy_private",  type: "shell", inline: <<-'SHELL'
-            cp /tmp/.ssh/id_rsa /root/.ssh/
-            mv /tmp/.ssh/id_rsa /home/vagrant/.ssh/
-            chown root /root/.ssh/id_rsa
-          SHELL
+    config.vm.define machinename do |node|
+      node.vm.box_check_update = false
+      node.vm.box = machineconfig[:box_name]
+      node.vm.box_version = machineconfig[:box_version]
+      node.vm.host_name = machineconfig[:hostname]
+      node.vm.network "private_network", ip: machineconfig[:ip]
+      node.vm.provider "virtualbox" do |vb|
+        vb.customize ["modifyvm", :id, "--memory", machineconfig[:memory]]
+        vb.customize ["modifyvm", :id, "--cpus", machineconfig[:cpu]]
+      end
+      node.vm.provision "ssh_keys", type: "shell", run: "always" do |s|
+        ssh_pub_key = File.readlines("#{Dir.home}/.ssh/id_rsa.pub").first.strip
+        s.inline = <<-SHELL
+        sudo mkdir -p ~root/.ssh
+        echo #{ssh_pub_key} >> /home/vagrant/.ssh/authorized_keys
+        echo #{ssh_pub_key} >> /root/.ssh/authorized_keys
+        SHELL
+      end
+      node.vm.provision "copy_private", after: "ssh_keys", type: "file", run: "always", source: "/root/.ssh/id_rsa", destination: "/tmp/.ssh/id_rsa"
+      node.vm.provision "move_private", after: "copy_private",  type: "shell", inline: <<-'SHELL'
+      cp /tmp/.ssh/id_rsa /root/.ssh/
+      mv /tmp/.ssh/id_rsa /home/vagrant/.ssh/
+      chown root /root/.ssh/id_rsa
+      SHELL
       if index == servers.size - 1
+        node.vm.synced_folder ".", "/vagrant", type: "virtualbox"
         node.vm.provision "ansible_roles", type: "shell", inline: <<-'SHELL'
-          sudo mkdir /etc/ansible/roles -p
+        sudo mkdir /etc/ansible/roles -p
           sudo chmod o+w /etc/ansible/roles
         SHELL
         node.vm.provision "run_playbook", run: "always", type: "ansible_local" do |ansible|
@@ -90,7 +91,7 @@ Vagrant.configure("2") do |config|
           ansible.inventory_path = "inventory.yml"
           ansible.playbook = "playbook.yml"
           ansible.limit = "all"
-          ansible.verbose = "vvv"
+          # ansible.verbose = "vvv"
         end
       end
     end

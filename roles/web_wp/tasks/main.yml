@@ -1,0 +1,68 @@
+---
+- name: Download wordpress from official site
+  delegate_to: localhost
+  ansible.builtin.get_url:
+    url: https://wordpress.org/wordpress-6.1.1.tar.gz
+    dest: "data/wordpress-6.1.1.tar.gz"
+- name: Copy wordpress to node
+  ansible.builtin.copy:
+    src: "data/wordpress-6.1.1.tar.gz"
+    dest: "/tmp/wordpress-6.1.1.tar.gz"
+- name: Untar wordpress
+  ansible.builtin.unarchive:
+    src: "/tmp/wordpress-6.1.1.tar.gz"
+    dest: "/var/www/html"
+    extra_opts: [--strip-components=1]
+    remote_src: yes
+- set_fact:
+    master_ip: "{{ hostvars[item]['ansible_host'] }}"
+    master_server: "{{ item }}"
+  with_items: "{{ groups.dbmysql }}"
+  when:
+    - hostvars[item].replication_role == 'master'
+    - master_ip is not defined
+- set_fact:
+    loadbalancer_ip: "{{ hostvars[item]['ansible_host'] }}"
+  with_items: "{{ groups.webnginx | first }}"
+  when:
+    - loadbalancer_ip is not defined
+- name: Copy wp-config
+  ansible.builtin.template:
+    src: "wp-config.php.j2"
+    dest: "/var/www/html/wp-config.php"
+- name: Enable Remi repo
+  ansible.builtin.yum:
+    name: https://rpms.remirepo.net/enterprise/remi-release-7.rpm
+    validate_certs: false
+    state: present
+- name: Install PHP
+  ansible.builtin.yum:
+    enablerepo: "remi-php80"
+    name: 
+    - php
+    - php-bcmath
+    - php-cli
+    - php-common
+    - php-curl
+    - php-devel
+    - php-dom
+    - php-exif
+    - php-fileinfo
+    - php-fpm
+    - php-gd
+    - php-imagick
+    - php-json
+    - php-mbstring
+    - php-mysqlnd
+    - php-mysqli
+    - php-openssl
+    - php-pcre
+    - php-pear
+    - php-xml
+    - php-zip
+    state: present
+- name: Reload httpd
+  systemd:
+    name: httpd.service
+    enabled: yes
+    state: restarted

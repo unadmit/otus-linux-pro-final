@@ -1,0 +1,260 @@
+- name: Disable default repo
+  ansible.builtin.yum_repository:
+    name: "{{ item }}"
+    state: absent
+  with_items:
+      - "mysql-connectors-community/x86_64"
+      - "mysql-tools-community/x86_64"
+      - "mysql56-community/x86_64"
+      - "mysql-community"
+- name: Install and enable repo
+  ansible.builtin.yum:
+    name: "https://repo.mysql.com/mysql80-community-release-el7-3.noarch.rpm"
+    state: present
+- name: Install GPG key for RPM
+  ansible.builtin.rpm_key:
+    state: present
+    key: https://repo.mysql.com/RPM-GPG-KEY-mysql-2022
+- name: Install mysql
+  ansible.builtin.yum:
+    enablerepo: "mysql80-community"
+    name: 
+    - mysql-community-server
+    - mysql-community-client
+    - MySQL-python
+    - python2-PyMySQL
+    state: present
+- name: Copy my.cnf from template
+  template:
+    src: "my.cnf.j2"
+    dest: "/etc/my.cnf"
+  notify: Reload mysqld
+  when:
+    - replication_role == 'slave'
+- name: Ensure mysql is started
+  ansible.builtin.systemd:
+    name: mysqld.service
+    enabled: yes
+    state: started
+- name: Open firewall ports
+  ansible.posix.firewalld:
+    port: 3306/tcp
+    permanent: yes
+    immediate: yes
+    state: enabled
+- name: Secure mysql - get temp password
+  shell: >-
+    grep 'temporary password' /var/log/mysqld.log |
+    awk '{print $NF}' | tail -n 1
+  args:
+    creates: /root/.my.cnf
+  register: temp_root_password
+  no_log: true
+- debug:
+    msg: "PWD: {{ temp_root_password }}"
+- name: Secure mysql - set password for root@localhost
+  shell: >
+    mysql -u root --password="{{ temp_root_password.stdout }}" --connect-expired-password -NBe
+    'ALTER USER "root"@"{{ item }}"
+    IDENTIFIED WITH mysql_native_password BY "{{ mysql_root_password }}";'
+  args:
+    creates: /root/.my.cnf
+  with_items:
+    - localhost
+  no_log: true
+  ignore_errors: true
+- name: Secure mysql - get all hosts for root except localhost
+  community.mysql.mysql_query:
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    query: select host from mysql.user where user = 'root'
+  register: query_result_root_hosts
+- debug: var=query_result_root_hosts.query_result
+- set_fact:
+    query_root_hosts="{{ query_result_root_hosts.query_result|sum(start=[])|map(attribute='host') | list }}"
+- debug: var=query_root_hosts
+- name: Secure mysql - set password for root@other hosts
+  shell: >
+    mysql -u root --password="{{ mysql_root_password }}" --connect-expired-password -NBe
+    'ALTER USER "root"@"{{ item }}"
+    IDENTIFIED WITH mysql_native_password BY "{{ mysql_root_password }}";'
+  loop: "{{ query_root_hosts|default([]) }}"
+  args:
+    creates: /root/.my.cnf
+  when: item != "localhost"
+- name: Secure mysql - copy my.cnf with credentials
+  template:
+    src: "root-my.cnf.j2"
+    dest: "/root/.my.cnf"
+    owner: "root"
+    group: "root"
+    mode: 0600
+- name: Secure mysql - get hosts for anonymous logon
+  command: mysql -NBe "SELECT Host FROM mysql.user WHERE User = ''"
+  register: mysql_anonymous_hosts
+  changed_when: false
+  check_mode: false
+- name: Secure mysql - remove all hosts for anonymous logon
+  mysql_user:
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    check_implicit_admin: yes
+    name: ""
+    host: "{{ item }}"
+    state: absent
+  with_items: "{{ mysql_anonymous_hosts.stdout_lines|default([]) }}"
+- name: Secure mysql - remove test database
+  mysql_db:
+    name: test
+    state: absent
+- name: Ensure replica user exists on master
+  mysql_user:
+    name: "{{ mysql_replica_username }}"
+    password: "{{ mysql_replica_password }}"
+    host: '%'
+    priv: '*.*:REPLICATION SLAVE,REPLICATION CLIENT'
+    state: present
+  when:
+    - replication_role == "master"
+    - mysql_replica_username is defined
+- set_fact:
+    master_ip: "{{ hostvars[item]['ansible_host'] }}"
+    master_server: "{{ item }}"
+  with_items: "{{ groups.dbmysql }}"
+  when:
+    - hostvars[item].replication_role == 'master'
+    - replication_role == "slave"
+- debug: 
+    msg:
+      - "master_server: {{ master_server }}"
+      - "master_ip: {{ master_ip }}"
+  when:
+    - replication_role == "slave"
+- name: Check replica status on slave
+  mysql_replication:
+    mode: getslave
+    login_user: "root"
+    login_password: "{{ mysql_root_password }}"
+  ignore_errors: true
+  failed_when: false
+  register: slave
+  when:
+    - replication_role == "slave"
+    - (master_server | length) > 0
+- name: Check replica status on master
+  mysql_replication: mode=getmaster
+  delegate_to: "{{ master_server }}"
+  register: master
+  when:
+    - (slave.Is_Slave is defined and not slave.Is_Slave) or (slave.Is_Replica is defined and not slave.Is_Replica) or (slave.Is_Slave is not defined and slave.Is_Replica is not defined and slave is failed)
+    - replication_role == 'slave'
+    - (master_server | length) > 0
+- name: Setup replication on slave
+  mysql_replication:
+    mode: changemaster
+    master_host: "{{ master_ip }}"
+    master_user: "{{ mysql_replica_username }}"
+    master_password: "{{ mysql_replica_password }}"
+    master_log_file: "{{ master.File }}"
+    master_log_pos: "{{ master.Position }}"
+  ignore_errors: true
+  failed_when: false
+  when:
+    - (slave.Is_Slave is defined and not slave.Is_Slave) or (slave.Is_Replica is defined and not slave.Is_Replica) or (slave.Is_Slave is not defined and slave.Is_Replica is not defined and slave is failed)
+    - replication_role == 'slave'
+    - (master_server | length) > 0
+- name: Start replication
+  mysql_replication:
+    mode: startslave
+  when:
+    - (slave.Is_Slave is defined and not slave.Is_Slave) or (slave.Is_Replica is defined and not slave.Is_Replica) or (slave.Is_Slave is not defined and slave.Is_Replica is not defined and slave is failed)
+    - replication_role == 'slave'
+    - (master_server | length) > 0
+- name: Ensure wp database exists
+  community.mysql.mysql_db:
+    name: "{{ wpdb_dbname }}"
+    state: present
+    login_user: "root"
+    login_password: "{{ mysql_root_password }}"
+  when: replication_role == "master"
+- name: Ensure wpdb_user exists
+  community.mysql.mysql_user:
+    login_user: "root"
+    login_password: "{{ mysql_root_password }}"
+    name: "{{ wpdb_user }}"
+    host: '%'
+    password: "{{ wpdb_password }}"
+    priv: "{{ wpdb_dbname }}.*:ALL"
+    state: present
+  when: replication_role == "master"
+- name: Create backup dir
+  ansible.builtin.file:
+    path: "/var/backup/{{ wpdb_dbname }}/"
+    state: directory
+  when:
+    replication_role == "slave"
+- name: Copy backup script
+  ansible.builtin.template:
+    src: backup.sh.j2
+    dest: /opt/backup_db_each_table.sh
+    mode: '0700'
+    owner: 'root'
+    group: 'root'
+  when:
+    replication_role == "slave"
+- name: Setup cron job for backup
+  ansible.builtin.cron:
+    name: Mysql autobackup on per-table basis
+    weekday: "*"
+    hour: "12"
+    user: root
+    cron_file: mysql-per-table-backup
+    job: "/opt/backup_db_each_table.sh"
+  when:
+    replication_role == "slave"
+- name: Copy backup to master db server
+  ansible.builtin.copy:
+    src: "data/wordpress"
+    dest: "/tmp/wpbackup"
+  when:
+    - replication_role == "master"
+- name: List filename of per-table backup
+  ansible.builtin.find:
+    paths: "/tmp/wpbackup/wordpress"
+    patterns: "wp*.gz"
+  when:
+    - replication_role == "master"
+  register: find_wp_backup_files
+- set_fact:
+    wp_backup_files="{{ find_wp_backup_files.files|map(attribute='path')|list }}"
+  when:
+    - replication_role == "master"
+
+- name: Dump variable
+  ansible.builtin.debug:
+    var: wp_backup_files
+  when:
+    - replication_role == "master"
+- name: Drop wp database
+  community.mysql.mysql_db:
+    name: "{{ wpdb_dbname }}"
+    state: absent
+  when:
+    - replication_role == "master"
+- name: Recreate wp database
+  community.mysql.mysql_db:
+    name: "{{ wpdb_dbname }}"
+    state: present
+  when:
+    - replication_role == "master"
+- name: zcat backup gz files into '{{ wpdb_dbname }}'
+  ansible.builtin.shell: zcat {{ item }} | mysql --skip-column-names {{ wpdb_dbname }}
+  with_items: "{{ wp_backup_files }}"
+  when:
+    - replication_role == "master"
+  async: 60
+  poll: 0
+- name: Execute backup once
+  ansible.builtin.command: "/opt/backup_db_each_table.sh"
+  when:
+    replication_role == "slave"

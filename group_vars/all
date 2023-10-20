@@ -1,0 +1,20 @@
+---
+mysql_root_password: "Str0nkP4sswr!d" 
+mysql_replica_username: "repluser" 
+mysql_replica_password: "r3p1P@sswr!d" 
+use_rpms: true 
+update_time: false 
+kibana_rpm: "files/kibana_7.17.3_x86_64.rpm" 
+elasticsearch_rpm: "files/elasticsearch_7.17.3_x86_64.rpm" 
+logstash_rpm: "files/logstash_7.17.3_x86_64.rpm" 
+filebeat_rpm: "files/filebeat_7.17.3_x86_64.rpm" 
+grafana_rpm: "files/grafana-9.3.2-1.x86_64.rpm" 
+wpdb_user: "wpdb_user" 
+wpdb_password: "w0rdpr3ss_&!" 
+wpdb_dbname: "wordpress"
+wpdb_host: "192.168.11.56"
+wpdb_site_host: "192.168.88.43:8082" 
+ssl_common_name: "192.168.88.43" 
+telegram_bot_token_file: "files/telebot.token"
+bootstrap_cluster: false
+restore_wpbackup: false
