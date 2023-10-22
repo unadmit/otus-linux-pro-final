@@ -15,3 +15,9 @@
 - hosts: dbmysql
   roles: 
     - role: db_mysql
+- hosts: hostmetrics
+  roles:
+    - role: prometheus_agent
+- hosts: metricscollectors
+  roles:
+    - role: prometheus_server

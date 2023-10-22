@@ -37,3 +37,13 @@ dbmysql:
     apache-mysql-slave:
       replication_role: slave
       server_id: 2
+hostmetrics:
+  hosts:
+    nginx-apache-mysql:
+    apache-mysql-slave:
+    prometheus:
+    backup:
+    elk:
+metricscollectors:
+  hosts:
+    prometheus:

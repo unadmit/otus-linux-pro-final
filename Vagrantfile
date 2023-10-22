@@ -40,7 +40,10 @@ servers={
     :box_version => "2004.1",
     :memory => "2048",
     :cpu => "1",
-    :ip => "192.168.56.3"
+    :ip => "192.168.56.3",
+    :ports => [
+      {guest: 80, host: 8082}
+    ]
   },
   :ansible=>{
     :hostname => "ansible",
@@ -60,6 +63,11 @@ Vagrant.configure("2") do |config|
       node.vm.box_version = machineconfig[:box_version]
       node.vm.host_name = machineconfig[:hostname]
       node.vm.network "private_network", ip: machineconfig[:ip]
+      if machineconfig.key?(:ports)
+        machineconfig[:ports].each do |portconf|
+          node.vm.network "forwarded_port", portconf
+        end
+      end
       node.vm.provider "virtualbox" do |vb|
         vb.customize ["modifyvm", :id, "--memory", machineconfig[:memory]]
         vb.customize ["modifyvm", :id, "--cpus", machineconfig[:cpu]]

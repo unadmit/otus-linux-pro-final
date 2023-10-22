@@ -1,0 +1,104 @@
+---
+- name: Copy node_exporter to node
+  ansible.builtin.copy:
+    src: "data/prometheus-2.41.0.linux-amd64.tar.gz"
+    dest: "/tmp/prometheus-2.41.0.linux-amd64.tar.gz"
+- name: Untar node_exporter
+  ansible.builtin.unarchive:
+    src: "/tmp/prometheus-2.41.0.linux-amd64.tar.gz"
+    dest: "/tmp"
+    extra_opts: [--strip-components=1]
+    remote_src: yes
+- name: Ensure that the prometheus user exists
+  user:
+    name: "prometheus"
+    shell: /bin/false
+- name: Copy prometheus binary
+  copy:
+    src: "/tmp/prometheus"
+    dest: "/usr/bin/prometheus"
+    mode: 0755
+    remote_src: yes
+- name: Copy systemd service file
+  template:
+    src: "prometheus.service.j2"
+    dest: "/etc/systemd/system/prometheus.service"
+- name: Ensure prometheus folder exists in etc
+  file:
+    state: directory
+    path: /etc/prometheus
+    owner: "prometheus"
+    group: "prometheus"
+    mode: 0755
+- name: Copy prometheus config from template
+  template:
+    src: "prometheus.yml.j2"
+    dest: "/etc/prometheus/prometheus.yml"
+- name: create /var/lib/promytheus/data
+  file:
+    state: directory
+    path: /var/lib/prometheus/data
+    recurse: true
+    owner: "prometheus"
+    group: "prometheus"
+    mode: 0755
+- name: Systemd reload to pickup new service
+  systemd:
+    daemon-reload: true
+    enabled: true
+    state: restarted
+    name: "prometheus.service"
+  notify: restart_prometheus_server
+- name: Open port 9090 in firewall
+  ansible.builtin.firewalld:
+    port: 9090/tcp
+    permanent: yes
+    immediate: yes
+    state: enabled
+- name: Copy grafana.rpm file
+  copy:
+    src: "{{ grafana_rpm }}"
+    dest: "/tmp/grafana.rpm"
+- name: Install grafana from rpm
+  ansible.builtin.yum:
+    name: "/tmp/grafana.rpm"
+    state: present
+  when: use_rpms
+- name: Override grafana-server systemd service definition
+  copy:
+    src: "grafana-server.service"
+    dest: "/usr/lib/systemd/system/grafana-server.service"
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+- name: Copy pre-configured grafana.db
+  ansible.builtin.copy:
+    src: "data/grafana.db"
+    dest: "/var/lib/grafana/grafana.db"
+- name: Set permissions on grafana.db
+  ansible.builtin.file:
+    path: "/var/lib/grafana/grafana.db"
+    owner: grafana
+    group: grafana
+    mode: '0600'
+- name: Make grafana listen on external url
+  ansible.builtin.lineinfile:
+    path: /etc/grafana/grafana.ini
+    regex: "{{ item.regex }}"
+    line: "{{ item.line }}"
+  with_items:
+    - regex: "^;root_url"
+      line: "root_url = %(protocol)s://%(domain)s:%(http_port)s/internal/grafana/"
+    - regex: "^;serve_from_sub_path"
+      line: "serve_from_sub_path = true"
+- name: Ensure grafana enabled and started
+  ansible.builtin.systemd:
+    name: grafana-server.service
+    enabled: true
+    state: restarted
+- name: Open port 3000 in firewalld
+  ansible.posix.firewalld:
+    port: 3000/tcp
+    permanent: yes
+    immediate: yes
+    state: enabled

@@ -2,6 +2,12 @@
   ansible.builtin.yum:
     name: nginx
     state: present
+- set_fact:
+    kibana_server: "{{ hostvars[item]['ansible_host'] }}"
+  with_items: "{{ groups.metricscollectors }}"
+- set_fact:
+    grafana_server: "{{ hostvars[item]['ansible_host'] }}"
+  with_items: "{{ groups.metricscollectors }}"
 - name: Apply default.conf
   template:
     src: "nginx.conf.j2"
@@ -17,3 +23,15 @@
     permanent: yes
     immediate: yes
     state: enabled
+- name: Install packages required for setsebool
+  ansible.builtin.yum:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - libselinux-python
+    - libsemanage-python
+- name: Set httpd_can_network_connect flag on and keep it persistent across reboots
+  ansible.posix.seboolean:
+    name: httpd_can_network_connect
+    state: true
+    persistent: true
