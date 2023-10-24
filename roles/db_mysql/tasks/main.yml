@@ -43,15 +43,13 @@
     immediate: yes
     state: enabled
 - name: Secure mysql - get temp password
-  shell: >-
+  shell: >
     grep 'temporary password' /var/log/mysqld.log |
     awk '{print $NF}' | tail -n 1
   args:
     creates: /root/.my.cnf
   register: temp_root_password
   no_log: true
-- debug:
-    msg: "PWD: {{ temp_root_password }}"
 - name: Secure mysql - set password for root@localhost
   shell: >
     mysql -u root --password="{{ temp_root_password.stdout }}" --connect-expired-password -NBe
@@ -72,7 +70,6 @@
 - debug: var=query_result_root_hosts.query_result
 - set_fact:
     query_root_hosts="{{ query_result_root_hosts.query_result|sum(start=[])|map(attribute='host') | list }}"
-- debug: var=query_root_hosts
 - name: Secure mysql - set password for root@other hosts
   shell: >
     mysql -u root --password="{{ mysql_root_password }}" --connect-expired-password -NBe
@@ -114,6 +111,7 @@
     host: '%'
     priv: '*.*:REPLICATION SLAVE,REPLICATION CLIENT'
     state: present
+  no_log: true
   when:
     - replication_role == "master"
     - mysql_replica_username is defined
@@ -123,12 +121,6 @@
   with_items: "{{ groups.dbmysql }}"
   when:
     - hostvars[item].replication_role == 'master'
-    - replication_role == "slave"
-- debug: 
-    msg:
-      - "master_server: {{ master_server }}"
-      - "master_ip: {{ master_ip }}"
-  when:
     - replication_role == "slave"
 - name: Check replica status on slave
   mysql_replication:
@@ -227,12 +219,6 @@
   register: find_wp_backup_files
 - set_fact:
     wp_backup_files="{{ find_wp_backup_files.files|map(attribute='path')|list }}"
-  when:
-    - replication_role == "master"
-
-- name: Dump variable
-  ansible.builtin.debug:
-    var: wp_backup_files
   when:
     - replication_role == "master"
 - name: Drop wp database

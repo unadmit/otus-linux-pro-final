@@ -1,0 +1,141 @@
+---
+- name: Install java
+  ansible.builtin.yum:
+    name: java-1.8.0-openjdk.x86_64
+    state: present
+- name: Copy elastic rpm
+  copy:
+    src: "{{ elasticsearch_rpm }}"
+    dest: "/tmp/elasticsearch.rpm"
+    force: false
+- name: Install elasticsearch from rpm
+  ansible.builtin.yum:
+    name: "/tmp/elasticsearch.rpm"
+    state: present
+- name: Create elasticsearch.service.d folder
+  ansible.builtin.file:
+    path: /etc/systemd/system/elasticsearch.service.d
+    state: directory
+    mode: 0755
+    recurse: yes
+- name: Tune jvm options
+  copy:
+    dest: "/etc/elasticsearch/jvm.options.d/jvm.options"
+    content: |
+      -Xms2g
+      -Xmx2g
+- name: Tune startup timeout for elasticsearch
+  copy:
+    src: "startup-timeout.conf"
+    dest: "/etc/systemd/system/elasticsearch.service.d/startup-timeout.conf"
+- name: Reload systemd and start elasticsearch
+  ansible.builtin.systemd:
+    name: elasticsearch
+    daemon-reload: true
+    enabled: true
+    state: started
+  register: es_restarted
+- name: Wait for elasticsearch to startup
+  wait_for: 
+    host: localhost
+    port: 9200
+    delay: 5
+    connect_timeout: 1
+  when: es_restarted is defined and es_restarted.changed
+- name: Copy logstash rpm
+  copy:
+    src: "{{ logstash_rpm }}"
+    dest: "/tmp/logstash.rpm"
+    force: false
+- name: Install logstash from rpm
+  ansible.builtin.yum:
+    name: "/tmp/logstash.rpm"
+    state: present
+- name: Create logstash.service.d folder
+  ansible.builtin.file:
+    path: /etc/systemd/system/logstash.service.d
+    state: directory
+    mode: 0755
+    recurse: yes
+- name: Tune startup timeout for logstash
+  copy:
+    src: "startup-timeout.conf"
+    dest: "/etc/systemd/system/logstash.service.d/startup-timeout.conf"
+- name: Copy logstash-nginx-es config
+  copy:
+    src: "logstash-nginx-es.conf"
+    dest: "/etc/logstash/conf.d/logstash-nginx-es.conf"
+  register: logstash_conf_copy
+- name: Edit logstash.yml enabling conf.d collection
+  ansible.builtin.lineinfile:
+    path: /etc/logstash/logstash.yml
+    regexp: '^# path.config:'
+    line: "path.config: /etc/logstash/conf.d"
+- name: Reload systemd and start logstash
+  ansible.builtin.systemd:
+    name: logstash
+    daemon-reload: true
+    enabled: true
+    state: restarted
+  register: logstash_restarted
+  when: logstash_conf_copy is defined and logstash_conf_copy.changed
+- name: Open port 5400 on firewall
+  ansible.posix.firewalld:
+    port: 5400/tcp
+    permanent: yes
+    immediate: yes
+    state: enabled
+- name: Copy kibana rpm
+  copy:
+    src: "{{ kibana_rpm }}"
+    dest: "/tmp/kibana.rpm"
+    force: false
+- name: Install kibana from rpm
+  ansible.builtin.yum:
+    name: "/tmp/kibana.rpm"
+    state: present
+- name: Create kibana.service.d folder
+  ansible.builtin.file:
+    path: /etc/systemd/system/kibana.service.d
+    state: directory
+    mode: 0755
+    recurse: yes
+- name: Tune startup timeout for kibana
+  copy:
+    src: "startup-timeout.conf"
+    dest: "/etc/systemd/system/kibana.service.d/startup-timeout.conf"
+- name: Open port 5601 on firewall
+  ansible.posix.firewalld:
+    port: 5601/tcp
+    permanent: yes
+    immediate: yes
+    state: enabled
+- name: Edit kibana listen url
+  ansible.builtin.lineinfile:
+    path: "/etc/kibana/kibana.yml"
+    regexp: '^#server\.host:\s"localhost"'
+    line: "server.host: \"{{ ansible_host }}\""
+- name: Reload systemd and start kibana
+  ansible.builtin.systemd:
+    name: kibana
+    daemon-reload: true
+    enabled: true
+    state: restarted
+  register: kibana_restarted
+- name: Edit kibana baseurl
+  ansible.builtin.lineinfile:
+    path: "/etc/kibana/kibana.yml"
+    regexp: '^#server\.basePath:\s""'
+    line: "server.basePath: \"/internal/kibana\""
+- name: Enable kibana rewrite
+  ansible.builtin.lineinfile:
+    path: "/etc/kibana/kibana.yml"
+    regexp: '^#server\.rewriteBasePath:\s""'
+    line: "server.rewriteBasePath: true"
+- name: Reload systemd and start kibana
+  ansible.builtin.systemd:
+    name: kibana
+    daemon-reload: true
+    enabled: true
+    state: restarted
+  register: kibana_restarted

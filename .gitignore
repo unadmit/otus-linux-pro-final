@@ -1,13 +1,3 @@
 .vagrant/
-files/*.rpm
-files/prometheus
-files/node_exporter
-files/amtool
-files/alertmanager
-files/apache_exporter
-files/nginx-prometheus-exporter
-files/*.tar.gz
-files/*.token
-files/certs/
-files/backup/*.pub
+data/*.rpm
 *.log

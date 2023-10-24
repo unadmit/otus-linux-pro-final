@@ -4,7 +4,7 @@
     state: present
 - set_fact:
     kibana_server: "{{ hostvars[item]['ansible_host'] }}"
-  with_items: "{{ groups.metricscollectors }}"
+  with_items: "{{ groups.logservers }}"
 - set_fact:
     grafana_server: "{{ hostvars[item]['ansible_host'] }}"
   with_items: "{{ groups.metricscollectors }}"

@@ -1,15 +1,12 @@
 ---
 - hosts: all
-  become: yes
   roles:
     - role: common_settings
 - hosts: webapache
-  become: yes
   roles:
     - role: web_httpd
     - role: web_wp
 - hosts: webnginx
-  become: yes
   roles:
     - role: web_nginx
 - hosts: dbmysql
@@ -18,6 +15,10 @@
 - hosts: hostmetrics
   roles:
     - role: prometheus_agent
+    - role: filebeat_agent
 - hosts: metricscollectors
   roles:
     - role: prometheus_server
+- hosts: logservers
+  roles:
+    - role: elk_stack

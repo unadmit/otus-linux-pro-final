@@ -63,7 +63,6 @@
   ansible.builtin.yum:
     name: "/tmp/grafana.rpm"
     state: present
-  when: use_rpms
 - name: Override grafana-server systemd service definition
   copy:
     src: "grafana-server.service"

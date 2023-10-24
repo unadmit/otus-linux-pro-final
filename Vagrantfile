@@ -10,14 +10,6 @@ servers={
     :cpu => "2",
     :ip => "192.168.56.7"
   },
-  :backup=>{
-    :hostname => "backup",
-    :box_name => "centos/7",
-    :box_version => "2004.1",
-    :memory => "1024",
-    :cpu => "1",
-    :ip => "192.168.56.6"
-  },
   :prometheus=>{
     :hostname => "prometheus",
     :box_name => "centos/7",
@@ -57,6 +49,8 @@ servers={
 
 Vagrant.configure("2") do |config|
   servers.each_with_index do |(machinename,machineconfig),index|
+    config.vm.synced_folder ".","/vagrant", disabled: true
+    config.vbguest.auto_update = false
     config.vm.define machinename do |node|
       node.vm.box_check_update = false
       node.vm.box = machineconfig[:box_name]
@@ -87,6 +81,7 @@ Vagrant.configure("2") do |config|
       chown root /root/.ssh/id_rsa
       SHELL
       if index == servers.size - 1
+        node.vbguest.auto_update = true
         node.vm.synced_folder ".", "/vagrant", type: "virtualbox"
         node.vm.provision "ansible_roles", type: "shell", inline: <<-'SHELL'
         sudo mkdir /etc/ansible/roles -p

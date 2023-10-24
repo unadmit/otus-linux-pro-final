@@ -1,7 +1,5 @@
 all:
   hosts:
-    ansible:
-      ansible_connection: local
     nginx-apache-mysql:
       ansible_host: 192.168.56.3
       ansible_user: root
@@ -12,10 +10,6 @@ all:
       ansible_ssh_private_key_file: /home/vagrant/.ssh/id_rsa
     prometheus:
       ansible_host: 192.168.56.5
-      ansible_user: root
-      ansible_ssh_private_key_file: /home/vagrant/.ssh/id_rsa
-    backup:
-      ansible_host: 192.168.56.6
       ansible_user: root
       ansible_ssh_private_key_file: /home/vagrant/.ssh/id_rsa
     elk:
@@ -42,8 +36,10 @@ hostmetrics:
     nginx-apache-mysql:
     apache-mysql-slave:
     prometheus:
-    backup:
     elk:
 metricscollectors:
   hosts:
     prometheus:
+logservers:
+  hosts:
+    elk:    
